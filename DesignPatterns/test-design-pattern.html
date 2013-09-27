@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Spike for Scrum Studio</title>
+  <link rel="stylesheet" href="../css/qunit-1.12.0.css">
+</head>
+<body>
+  <div id="qunit"></div>
+  <div id="qunit-fixture"></div>
+  <script src="../scripts/qunit-1.12.0.js" type="text/javascript"></script>
+
+  <script type="text/javascript">
+      var Universe;
+      (function () {
+          var instance;
+          Universe = function Universe() {
+              if (instance) {
+                  return instance;
+              }
+              instance = this;
+              // all the functionality
+              this.start_time = 0;
+              this.bang = "Big";
+          };
+      }());
+
+      // parent constructor
+      function CarMaker() { }
+
+      // a method of the parent
+      CarMaker.prototype.drive = function () {
+          return "Vroom, I have " + this.doors + " doors";
+      };
+
+      // the static factory method
+      CarMaker.factory = function (type) {
+          var constr = type,
+          newcar;
+
+          // error if the constructor doesn't exist
+          if (typeof CarMaker[constr] !== "function") {
+              throw {
+                  name: "Error",
+                  message: constr + " doesn't exist"
+              };
+          }
+
+          // at this point the constructor is known to exist
+          // let's have it inherit the parent but only once
+          if (typeof CarMaker[constr].prototype.drive !== "function") {
+              CarMaker[constr].prototype = new CarMaker();
+          }
+          // create a new instance
+          newcar = new CarMaker[constr]();
+          // optionally call some methods and then return...
+          return newcar;
+      };
+
+      // define specific car makers
+      CarMaker.Compact = function () {
+          this.doors = 4;
+      };
+      CarMaker.Convertible = function () {
+          this.doors = 2;
+      };
+      CarMaker.SUV = function () {
+          this.doors = 24;
+      };
+
+
+      function Sale(price) {
+          this.price = price || 100;
+          this.decorators_list = [];
+      }
+      Sale.decorators = {};
+      Sale.decorators.fedtax = {
+          getPrice: function (price) {
+              return price + price * 5 / 100;
+          }
+      };
+      Sale.decorators.quebec = {
+          getPrice: function (price) {
+              return price + price * 7.5 / 100;
+          }
+      };
+      Sale.decorators.money = {
+          getPrice: function (price) {
+              return "$" + price.toFixed(2);
+          }
+      };
+      Sale.prototype.decorate = function (decorator) {
+          this.decorators_list.push(decorator);
+      };
+      Sale.prototype.getPrice = function () {
+          var price = this.price,
+              i,
+              max = this.decorators_list.length,
+              name;
+          for (i = 0; i < max; i += 1) {
+              name = this.decorators_list[i];
+              price = Sale.decorators[name].getPrice(price);
+          }
+          
+          return price;
+
+      };
+
+      var agg = (function () {
+          var index = 0,
+              data = [1, 2, 3, 4, 5],
+              length = data.length;
+          return {
+              next: function () {
+                  var element;
+                  if (!this.hasNext()) {
+                      return null;
+                  }
+                  element = data[index];
+                  index = index + 1;
+                  return element;
+              },
+              hasNext: function () {
+                  return index < length;
+              },
+              rewind: function () {
+                  index = 0;
+              },
+              current: function () {
+                  return data[index];
+              }
+          };
+
+      }());
+
+      var validator = {
+          // all available checks
+          types: {},
+
+          // error messages in the current
+          // validation session
+          messages: [],
+
+          // current validation config
+          // name: validation type
+          config: {},
+
+          // the interface method
+          // `data` is key => value pairs
+          validate: function (data) {
+              var i, msg, type, checker, result_ok;
+
+              // reset all messages
+              this.messages = [];
+
+              for (i in data) {
+                  if (data.hasOwnProperty(i)) {
+                      type = this.config[i];
+                      checker = this.types[type];
+                      if (!type) {
+                          continue; // no need to validate
+                      }
+                      if (!checker) { // uh-oh
+                          throw {
+                              name: "ValidationError",
+                              message: "No handler to validate type " + type
+                          };
+                      }
+                      result_ok = checker.validate(data[i]);
+                      if (!result_ok) {
+                          msg = "Invalid value for *" + i + "*, " + checker.instructions;
+                          this.messages.push(msg);
+                      }
+                  }
+              }
+
+              return this.hasErrors();
+          },
+
+          // helper
+          hasErrors: function () {
+              return this.messages.length !== 0;
+          }
+      };
+
+      // checks for non-empty values
+      validator.types.isNonEmpty = {
+          validate: function (value) {
+              return value !== "";
+          },
+          instructions: "the value cannot be empty"
+      };
+
+      // checks if a value is a number
+      validator.types.isNumber = {
+          validate: function (value) {
+              return !isNaN(value);
+          },
+          instructions: "the value can only be a valid number, e.g. 1, 3.14 or 2010"
+      };
+
+      // checks if the value contains only letters and numbers
+      validator.types.isAlphaNum = {
+          validate: function (value) {
+              return !/[^a-z0-9]/i.test(value);
+          },
+          instructions: "the value can only contain characters and numbers, no special symbols"
+      };
+
+      window.onload = function () {
+          test("QUnit setup", function () {
+              equal(true, true, "OK");
+          });
+
+          test("Universe Singleton", function () {
+              var u1 = new Universe();
+              var u2 = new Universe();
+
+              equal(u1 == u2, true, "u1 == u2");
+              equal(u1 === u2, true, "u1 === u2");
+
+              u2.bang = "big big";
+
+              equal(u1.bang === u2.bang, true, "u1.bang === u2.bang");
+
+              u2.talk = function () {
+                  return "talk";
+              };
+
+              notEqual(u1.talk, undefined, "u1.talk degined");
+
+          });
+
+          test("Factory", function () {
+              var compact = CarMaker.factory("Compact");
+              equal(compact.doors, 4, "Compact OK");
+
+              var convertible = CarMaker.factory("Convertible");
+              equal(convertible.doors, 2, "Convertible OK");
+
+              var suv = CarMaker.factory("SUV");
+              equal(suv.doors, 24, "SUV OK");
+          });
+
+          test("Decorators", function () {
+              var sale = new Sale(100); // the price is 100 dollars
+              equal(sale.getPrice(), 100, "Sale Default OK");
+
+              sale.decorate('fedtax'); // add federal tax
+              equal(sale.getPrice(), 105, "add federal tax OK");
+
+              sale.decorate('quebec'); // add provincial tax
+              equal(sale.getPrice(), 112.875, "add federal tax OK");
+
+              sale.decorate('money'); // format like money
+              equal(sale.getPrice(), "$112.88", "add federal tax OK");
+          });
+
+          test("Iterator", function () {
+              var val = 0;
+              while (agg.hasNext()) {
+                  ++val;
+                  equal(agg.next(), val, "next OK");
+              }
+              agg.rewind();
+              equal(agg.current(), 1, "rewind OK");
+          });
+
+          test("Strategy", function () {
+              var data = {
+                  first_name: "Super",
+                  last_name: "Man",
+                  age: "abcd",
+                  username: "o_O"
+              };
+
+              validator.config = {
+                  first_name: 'isNonEmpty',
+                  age: 'isNumber',
+                  username: 'isAlphaNum'
+              };
+
+              equal(validator.validate(data), true, "validate OK");
+              validator.messages.forEach(function (msg) {
+                  notEqual(msg, null, "msg OK");
+              });
+          });
+      }
+  </script>
+</body>
+</html>
